@@ -70,6 +70,7 @@ unittest
     static assert(isSlice!A == null);
 }
 
+
 /++
 Kind of $(LREF Slice).
 See_also:
@@ -186,7 +187,7 @@ auto sliced(size_t N, Iterator)(Iterator iterator, size_t[N] lengths...)
 {
     alias C = ImplicitlyUnqual!(typeof(iterator));
     size_t[N] _lengths;
-    foreach (i; Iota!N)
+    static foreach (i; 0 .. N)
         _lengths[i] = lengths[i];
     ptrdiff_t[1] _strides = 0;
     static if (isDynamicArray!Iterator)
@@ -296,20 +297,20 @@ Slice!(kind, N ~ (packs[0] == 1 ? [] : [packs[0] - 1]) ~ packs[1 .. $], Iterator
 {
     assert(lengths.lengthsProduct == slice.length, "elements count mismatch");
     size_t[typeof(return).N] _lengths;
-    foreach (i; Iota!N)
+    static foreach (i; 0 .. N)
         _lengths[i] = lengths[i];
-    foreach (i; Iota!(slice.N - 1))
+    static foreach (i; 0 .. typeof(slice).N - 1)
         _lengths[N + i] = slice._lengths[i + 1];
     ptrdiff_t[max(typeof(return).S, size_t(1))] _strides;
     static if (kind != Contiguous)
     {
-        foreach (i; Iota!(slice.S - 1))
+        static foreach (i; 0 .. typeof(slice).S - 1)
             _strides[N + i] = slice._strides[i + 1];
         auto stride = slice._strides[0];
-        foreach_reverse (i; Iota!N)
+        static foreach_reverse (i; 0 .. N)
         {
             _strides[i] = stride;
-            static if(i)
+            static if (i)
                 stride *= lengths[i];
         }
     }
@@ -397,7 +398,7 @@ slicedNdField(ndField, size_t N)(ndField field, size_t[N] lengths...)
     static if(hasShape!ndField)
     {
         auto shape = field.shape;
-        foreach (i; 0 .. N)
+        static foreach (i; 0 .. N)
             assert(lengths[i] <= shape[i], "Lengths should fit into ndfield's shape.");
     }
     import mir.ndslice.topology: indexed, ndiota;
@@ -691,7 +692,7 @@ struct Slice(SliceKind kind, size_t[] packs, Iterator)
                 assert(_indexes[E] < _lengths[E], indexError!(E, N));
                 ptrdiff_t ball = this._stride!E;
                 ptrdiff_t stride = _indexes[E] * ball;
-                foreach_reverse (i; Iota!E) //static
+                static foreach_reverse (i; 0 .. E)
                 {
                     ball *= _lengths[i + 1];
                     assert(_indexes[i] < _lengths[i], indexError!(i, N));
@@ -707,7 +708,7 @@ struct Slice(SliceKind kind, size_t[] packs, Iterator)
                     size_t stride = _indexes[E];
                 else
                     size_t stride = _strides[E] * _indexes[E];
-                foreach_reverse (i; Iota!E) //static
+                static foreach_reverse (i; 0 .. E)
                 {
                     assert(_indexes[i] < _lengths[i], indexError!(i, N));
                     stride += _strides[i] * _indexes[i];
@@ -718,7 +719,7 @@ struct Slice(SliceKind kind, size_t[] packs, Iterator)
                 enum E = I - 1;
                 assert(_indexes[E] < _lengths[E], indexError!(E, N));
                 size_t stride = _strides[E] * _indexes[E];
-                foreach_reverse (i; Iota!E) //static
+                static foreach_reverse (i; 0 .. E)
                 {
                     assert(_indexes[i] < _lengths[i], indexError!(i, N));
                     stride += _strides[i] * _indexes[i];
@@ -971,7 +972,7 @@ struct Slice(SliceKind kind, size_t[] packs, Iterator)
     Returns: static array of lengths
     See_also: $(LREF .Slice.structure)
     +/
-    ptrdiff_t[packs[0]] strides()() @safe @property const
+    ptrdiff_t[packs[0]] strides()() @safe @property const @nogc
     {
         static if (packs[0] <= S)
             return _strides[0 .. packs[0]];
@@ -980,14 +981,14 @@ struct Slice(SliceKind kind, size_t[] packs, Iterator)
             typeof(return) ret;
             static if (kind == Canonical)
             {
-                foreach (i; Iota!S)
+                static foreach (i; 0 .. S)
                     ret[i] = _strides[i];
                 ret[$-1] = 1;
             }
             else
             {
                 ret[$ - 1] = _stride!(packs[0] - 1);
-                foreach_reverse (i; Iota!(packs[0] - 1))
+                static foreach_reverse (i; 0 .. packs[0] - 1)
                     ret[i] = ret[i + 1] * _lengths[i + 1];
             }
             return ret;
@@ -1142,7 +1143,7 @@ struct Slice(SliceKind kind, size_t[] packs, Iterator)
         else
         {
             size_t ball = _lengths[$ - 1];
-            foreach_reverse(i; Iota!(dimension + 1, N - 1))
+            static foreach_reverse(i; dimension + 1 .. N - 1)
                 ball *= _lengths[i];
             return ball;
         }
@@ -1475,7 +1476,7 @@ struct Slice(SliceKind kind, size_t[] packs, Iterator)
     +/
     bool anyEmpty()() @safe const
     {
-        foreach (i; Iota!(packs[0]))
+        static foreach (i; 0 .. packs[0])
             if (_lengths[i] == 0)
                 return true;
         return false;
@@ -1499,7 +1500,7 @@ struct Slice(SliceKind kind, size_t[] packs, Iterator)
     +/
     auto ref backward()(size_t[packs[0]] index) @safe
     {
-        foreach (i; Iota!(packs[0]))
+        static foreach (i; 0 .. packs[0])
             index[i] = _lengths[i] - index[i];
         return this[index];
     }
@@ -1519,7 +1520,7 @@ struct Slice(SliceKind kind, size_t[] packs, Iterator)
     size_t elementsCount() @safe const
     {
         size_t len = 1;
-        foreach (i; Iota!(packs[0]))
+        static foreach (i; 0 .. packs[0])
             len *= _lengths[i];
         return len;
     }
@@ -1650,7 +1651,7 @@ struct Slice(SliceKind kind, size_t[] packs, Iterator)
     bool opEquals(SliceKind rkind, size_t[] rpacks, IteratorR)(const Slice!(rkind, rpacks, IteratorR) rslice) @trusted const
         if (rpacks.sum == N)
     {
-        foreach (i; Iota!N)
+        static foreach (i; 0 .. N)
             if (this._lengths[i] != rslice._lengths[i])
                 return false;
         static if (
@@ -1816,7 +1817,7 @@ struct Slice(SliceKind kind, size_t[] packs, Iterator)
             }
             static if (kind == Universal || kind == Canonical)
             {
-                foreach_reverse (i, slice; slices[0 .. $ - shrink]) //static
+                static foreach_reverse (i, slice; slices[0 .. $ - shrink])
                 {
                     static if (isIndex!(Slices[i]))
                     {
@@ -1834,7 +1835,7 @@ struct Slice(SliceKind kind, size_t[] packs, Iterator)
             else
             {
                 ptrdiff_t ball = this._stride!(slices.length - 1);
-                foreach_reverse (i, slice; slices) //static
+                static foreach_reverse (i, slice; slices)
                 {
                     static if (isIndex!(Slices[i]))
                     {
@@ -1852,9 +1853,9 @@ struct Slice(SliceKind kind, size_t[] packs, Iterator)
                         ball *= _lengths[i];
                 }
             }
-            foreach (i; Iota!(Slices.length, N))
+            static foreach (i; Slices.length .. N)
                 lengths_[i - F] = _lengths[i];
-            foreach (i; Iota!(Slices.length, N))
+            static foreach (i; Slices.length .. N)
                 static if (Ret.S > i - F)
                     strides_[i - F] = _strides[i];
             return Ret(lengths_, strides_[0 .. Ret.S], _iterator + stride);
