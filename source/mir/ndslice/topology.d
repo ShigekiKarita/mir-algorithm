@@ -6,6 +6,7 @@ Selectors create new views and iteration patterns over the same data, without co
 $(BOOKTABLE $(H2 Sequence Selectors),
 $(TR $(TH Function Name) $(TH Description))
 
+$(T2 broadcast, Broadcasts two slices into the same shape by repeating.)
 $(T2 cycle, Cycle repeates 1-dimensional field/range/array/slice in a fixed length 1-dimensional slice)
 $(T2 iota, Contiguous Slice with initial flattened (contiguous) index.)
 $(T2 linspace, Evenly spaced numbers over a specified interval.)
@@ -1998,6 +1999,72 @@ version(mir_test) unittest
     sl[1, 1] = 3;
     assert(sl == [[3.0, 3.0, 3.0],
                   [3.0, 3.0, 3.0]]);
+}
+
+/++
+Converts two slices to ones with the same shape using $(LREF repeat).
+For example, when it broadcasts `[N, 1, O]` and `[1, M, O]` into `[N, M, O]`,
+
+Params:
+   a = a slice
+   b = a slice
+Returns:
+   tuple of two broadcasted slices.
+See_also:
+   $(LINK2 https://numpy.org/doc/stable/user/basics.broadcasting.html, Broadcasting -- NumPy).
++/
+auto broadcast(S1, S2)(S1 a, S2 b) if (isSlice!S1 && isSlice!S2)
+{
+    import std.format : format;
+    import std.typecons : tuple;
+    import mir.primitives : DimensionCount;
+
+    static assert(DimensionCount!S1 == DimensionCount!S2);
+
+    auto maybeRepeat(size_t dim, S)(S x, size_t n)
+    {
+        import mir.ndslice.dynamic : swapped;
+        return x.length!dim == 1
+            ? x.repeat(n).unpack.swapped!(0, dim + 1)[0]
+            : x.repeat(1).unpack.swapped!(dim + 1, dim + 1)[0];
+    }
+
+    enum dim = DimensionCount!S1;
+    auto a0 = a;
+    auto b0 = b;
+    static foreach (d; 0 .. dim)
+    {
+        assert(a.length!d == b.length!d || a.length!d == 1 || b.length!d == 1);
+        mixin(format!q{
+            auto a%d = maybeRepeat!(%d)(a%d, b%d.length!%d);
+            auto b%d = maybeRepeat!(%d)(b%d, a%d.length!%d);
+        }(d + 1, d, d, d, d,
+          d + 1, d, d, d, d));
+    }
+    mixin(format!q{return tuple(a%d, b%d);}(dim, dim));
+}
+
+///
+version(mir_test)
+@nogc nothrow pure @safe
+unittest
+{
+    auto a = iota(3, 1, 4);
+    auto b = iota(1, 2, 4);
+    auto x = broadcast(a, b);
+
+    static immutable expected = [3, 2, 4];
+    assert(x[0].shape == expected);
+    assert(x[1].shape == expected);
+
+    foreach (i; 0 .. 3)
+    {
+        foreach (j; 0 .. 2)
+        {
+            assert(x[0][i, j] == a[i, 0]);
+            assert(x[1][i, j] == b[0, j]);
+        }
+    }
 }
 
 /++
